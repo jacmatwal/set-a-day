@@ -247,3 +247,28 @@ dialog#sheet::backdrop { background: rgb(0 0 0 / .45); }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 .plan li.is-skip .nm b { color: var(--muted); }
+
+/* v2: modes, banners, weekly, measurements */
+.mode { margin-bottom: 12px; }
+.mode .seg.wide { margin-top: 0; }
+.mode .sub { margin: 8px 2px 0; }
+.banner { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.banner > div:first-child { flex: 1 1 220px; }
+.banner p { margin: 4px 0 0; font-size: 14px; color: var(--text-2); }
+.banner.easy { border-left-color: var(--good); }
+.banner-actions { display: flex; gap: 8px; width: 100%; }
+.btn.sm { height: 40px; font-size: 15px; border-radius: 10px; flex: 1; }
+.btn.full { width: 100%; margin-top: 12px; }
+.card-head { display: flex; justify-content: space-between; align-items: center; }
+.wk { width: 100%; border-collapse: collapse; font-size: 15px; }
+.wk th, .wk td { padding: 7px 0; text-align: right; border-top: 1px solid var(--line); font-weight: 600; }
+.wk thead th { border-top: 0; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding-top: 0; }
+.wk tbody th { text-align: left; font-weight: 500; color: var(--text-2); }
+.wk td.delta { width: 56px; font-size: 14px; }
+.mrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.mrow > span:first-child { display: flex; flex-direction: column; }
+.mrow small { color: var(--muted); font-size: 12px; }
+.minput { display: flex; align-items: center; gap: 6px; background: var(--surface-2); border-radius: 10px; padding: 0 10px; flex: none; }
+.minput input { width: 64px; height: 44px; border: 0; background: transparent; color: var(--text); font-size: 18px; font-weight: 700; text-align: right; font-family: inherit; }
+.minput i { font-style: normal; color: var(--muted); font-size: 14px; width: 18px; }
+dialog#sheet { overflow-y: auto; }

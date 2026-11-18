@@ -1,5 +1,5 @@
 import { EX, PARTS, PART_NAME, EQUIPMENT } from './exercises.js';
-import { alternatives, poolFor } from './planner.js';
+import { alternatives, shortAlternatives, creditsFor, poolFor } from './planner.js';
 import * as S from './store.js';
 import { mountFigure } from './figure.js';
 import { barChart, lineChart, sparkline } from './charts.js';
@@ -23,7 +23,10 @@ const increment = ex => {
   if (ex.compound) return kg ? 2 : 5;
   return kg ? 1 : 2.5;
 };
-const rirText = ex => (ex.compound ? '1–2' : '0–1');
+const rirText = (ex, easy) => (easy ? '3–4' : ex.compound ? '1–2' : '0–1');
+const lenUnit = () => (units() === 'kg' ? 'cm' : 'in');
+const partLabel = (id, day) => (day.mode === 'short' && creditsFor(id) ? creditsFor(id).map(p => PART_NAME[p]).join(' + ') : PART_NAME[EX[id].part]);
+const roundTo = (v, step) => Math.round(v / step) * step;
 
 function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
@@ -31,9 +34,14 @@ function toast(msg) {
 }
 
 // ---------- suggestions (double progression) ----------
-function suggestion(ex, key) {
+function suggestion(ex, key, easy = false) {
   const last = S.lastPerformance(ex.id, key);
   const [lo, hi] = ex.reps;
+  if (easy) {
+    if (!last) return { last: null, w: '', r: lo, text: 'Easy week: use a light weight and stop with 3–4 reps left.' };
+    const w = last.w > 0 ? Math.max(0, roundTo(last.w * 0.85, increment(ex))) : 0;
+    return { last, w, r: lo, text: last.w > 0 ? `Easy week: ${fmtW(w)} ${units()} (about 85%), stop with 3–4 reps left.` : 'Easy week: stop with 3–4 reps left.' };
+  }
   if (!last) return { last: null, w: '', r: lo, text: `First time: pick a weight you can lift about ${hi - 2} times with good form.` };
   if (last.r >= hi && last.w > 0) {
     const w = last.w + increment(ex);
@@ -61,7 +69,7 @@ function initDraft(day, key, i) {
   const ex = EX[day.plan[i]];
   const logged = day.log[i];
   if (logged && !logged.skipped) ui.draft = { w: logged.w, r: logged.r, rir: logged.rir ?? 1 };
-  else { const sg = suggestion(ex, key); ui.draft = { w: sg.w, r: sg.r, rir: ex.compound ? 1 : 0 }; }
+  else { const sg = suggestion(ex, key, day.easy); ui.draft = { w: sg.w, r: sg.r, rir: day.easy ? 3 : ex.compound ? 1 : 0 }; }
 }
 
 function renderToday() {
@@ -73,13 +81,19 @@ function renderToday() {
   }
   const doneCount = Object.keys(day.log).length;
   const logged = Object.values(day.log).filter(s => !s.skipped).length;
-  const missing = PARTS.filter(p => !day.plan.some(id => EX[id].part === p.id));
+  const missing = day.mode === 'short' ? [] : PARTS.filter(p => !day.plan.some(id => EX[id].part === p.id));
+  const fresh = !day.started && !doneCount;
 
   let html = `<header class="top"><div><div class="eyebrow">${esc(longDate(key))}</div><h1>${day.finished ? 'Done' : 'Today'}</h1></div>`;
   if (day.started) html += `<div class="timer ${day.finished ? 'stopped' : ''}" id="timer">${fmtClock((day.finished || Date.now()) - day.started)}</div>`;
   html += `</header>`;
 
-  html += `<div class="segs" aria-label="${doneCount} of ${day.plan.length} done">${day.plan.map((_, i) => `<span class="${day.log[i] ? (day.log[i].skipped ? 'skip' : 'done') : ''} ${i === ui.focus ? 'cur' : ''}"></span>`).join('')}</div>`;
+  html += banners(key, day, fresh);
+  if (fresh) {
+    html += `<div class="mode"><div class="seg wide">${[['full', 'Full · 10'], ['short', 'Short · 5']].map(([m, l]) => `<button class="${(day.mode || 'full') === m ? 'on' : ''}" data-act="mode" data-v="${m}">${l}</button>`).join('')}</div>
+      ${day.mode === 'short' ? '<p class="sub">5 compound lifts covering the 8 major body parts, about 12 minutes. No direct forearm work today.</p>' : ''}</div>`;
+  }
+  html += `<div class="segs" style="grid-template-columns:repeat(${day.plan.length},1fr)" aria-label="${doneCount} of ${day.plan.length} done">${day.plan.map((_, i) => `<span class="${day.log[i] ? (day.log[i].skipped ? 'skip' : 'done') : ''} ${i === ui.focus ? 'cur' : ''}"></span>`).join('')}</div>`;
 
   if (day.finished && ui.focus == null) html += summaryCard(key, day, logged);
   else if (ui.focus != null) html += currentCard(key, day, ui.focus);
@@ -90,13 +104,13 @@ function renderToday() {
     const status = s ? (s.skipped ? '<span class="st skip">skipped</span>' : `<span class="st ok">${fmtW(s.w)}×${s.r}</span>`) : '';
     html += `<li class="${i === ui.focus ? 'cur' : ''} ${s ? (s.skipped ? 'is-skip' : 'is-done') : ''}" data-act="focus" data-i="${i}">
       <span class="num">${s && !s.skipped ? '✓' : s ? '–' : i + 1}</span>
-      <span class="nm"><b>${esc(ex.name)}</b><small>${PART_NAME[ex.part]}</small></span>${status}</li>`;
+      <span class="nm"><b>${esc(ex.name)}</b><small>${partLabel(id, day)}</small></span>${status}</li>`;
   });
   html += `</ol>`;
   if (missing.length) html += `<p class="note">No exercise available for ${missing.map(p => p.name).join(', ')} with your equipment settings.</p>`;
 
   html += `<div class="row-actions">`;
-  if (!day.started && !doneCount) html += `<button class="btn ghost" data-act="reshuffle">Reshuffle workout</button>`;
+  if (fresh) html += `<button class="btn ghost" data-act="reshuffle">Reshuffle workout</button>`;
   if (day.started && !day.finished) html += `<button class="btn ghost" data-act="finish">Finish workout</button>`;
   html += `</div>`;
   main.innerHTML = html;
@@ -109,18 +123,18 @@ function renderToday() {
 
 function currentCard(key, day, i) {
   const ex = EX[day.plan[i]];
-  const sg = suggestion(ex, key);
+  const sg = suggestion(ex, key, day.easy);
   const logged = day.log[i];
   const d = ui.draft;
   const [lo, hi] = ex.reps;
   const lastLine = sg.last ? `<div class="last"><span>Last time</span><b>${fmtW(sg.last.w)} ${units()} × ${sg.last.r}</b><small>${shortDate(sg.last.day)}</small></div>` : '';
   const canSwap = !logged;
   return `<section class="card current">
-    <div class="cur-head"><span class="chip">${PART_NAME[ex.part]}</span><span class="muted">${i + 1} of ${day.plan.length}</span>
+    <div class="cur-head"><span class="chip">${partLabel(ex.id, day)}</span><span class="muted">${i + 1} of ${day.plan.length}</span>
       ${canSwap ? `<button class="link" data-act="swap">Swap</button>` : ''}</div>
     <h2>${esc(ex.name)}</h2>
     <div class="fig" id="fig" title="Tap to pause"></div>
-    <div class="target"><b>${lo}–${hi} reps${ex.perSide ? ' per side' : ''}</b> · stop with ${rirText(ex)} left in the tank</div>
+    <div class="target"><b>${lo}–${hi} reps${ex.perSide ? ' per side' : ''}</b> · stop with ${rirText(ex, day.easy)} left in the tank</div>
     ${lastLine}
     <p class="hint">${esc(sg.text)}</p>
     <details class="cues"><summary>Form cues</summary><ul>${ex.cues.map(c => `<li>${esc(c)}</li>`).join('')}</ul></details>
@@ -155,8 +169,35 @@ function summaryCard(key, day, logged) {
       <div class="tile"><small>Strength</small><b>${siNow >= 100 ? '+' : ''}${(siNow - 100).toFixed(1)}%</b></div>
     </div>
     ${prs.length ? `<div class="prs"><b>New bests</b><ul>${prs.map(n => `<li>${esc(n)}</li>`).join('')}</ul></div>` : ''}
+    ${S.measureDue(key) ? `<button class="btn ghost full" data-act="open-measure">Log weekly measurements</button>` : ''}
     <p class="muted small">Tap any exercise below to edit it. Tomorrow's workout appears after midnight.</p>
   </section>`;
+}
+
+function banners(key, day, fresh) {
+  const dl = S.activeDeload(key);
+  if (dl) {
+    const n = Math.round((new Date(key + 'T12:00') - new Date(dl.start + 'T12:00')) / 864e5) + 1;
+    return `<section class="banner easy"><div><b>Easy week · day ${n} of 7</b><p>About 85% of your usual weight, stop with 3–4 reps left. These days don't count toward your strength score.</p></div>
+      <button class="link" data-act="end-deload">End early</button></section>`;
+  }
+  const stall = fresh && S.deloadSuggested(key);
+  if (stall) {
+    return `<section class="banner"><div><b>Progress has stalled</b><p>In the last 2 weeks, only ${stall.improved} of ${stall.tried} sets beat your previous best on that lift. An easy week often lets fatigue clear so progress picks up again. Same workouts at about 85% weight, stopping 3–4 reps short, for 7 days.</p></div>
+      <div class="banner-actions"><button class="btn primary sm" data-act="start-deload">Start easy week</button><button class="btn ghost sm" data-act="snooze-deload">Not now</button></div></section>`;
+  }
+  return '';
+}
+
+function openMeasure() {
+  const key = S.dayKey();
+  const last = S.lastMeasure() || {};
+  const today = S.measures().find(m => m.day === key);
+  const vals = today || last;
+  const rows = S.MEASURES.map(m => `<label class="mrow"><span><b>${m.name}</b><small>${m.how}</small></span>
+    <span class="minput"><input inputmode="decimal" data-m="${m.id}" value="${vals[m.id] ? fmtW(vals[m.id]) : ''}" placeholder="—"><i>${m.mass ? units() : lenUnit()}</i></span></label>`).join('');
+  openSheet('Measurements', `<p class="muted small">Once a week, same conditions every time. Leave any blank to skip it.${today ? ' Editing today’s entry.' : last.day ? ` Pre-filled from ${shortDate(last.day)}.` : ''}</p>${rows}
+    <button class="btn primary full" data-act="save-measure">Save</button>`);
 }
 
 function readInputs() {
@@ -186,10 +227,10 @@ function logCurrent(skip = false) {
 function openSwap() {
   const { day } = dayState();
   const i = ui.focus; const ex = EX[day.plan[i]];
-  const alts = alternatives(day.plan, i, S.get().settings.equip);
+  const alts = (day.mode === 'short' ? shortAlternatives : alternatives)(day.plan, i, S.get().settings.equip);
   const body = alts.length
     ? `<ul class="sheet-list">${alts.map(a => `<li><button data-act="pick-alt" data-id="${a.id}"><b>${esc(a.name)}</b><small>${a.reps[0]}–${a.reps[1]} reps</small></button></li>`).join('')}</ul>`
-    : `<p class="muted">No other ${PART_NAME[ex.part].toLowerCase()} exercise fits here without putting similar muscles back to back.</p>`;
+    : `<p class="muted">No other ${partLabel(ex.id, day).toLowerCase()} exercise fits here without putting similar muscles back to back.</p>`;
   openSheet(`Swap ${esc(ex.name)}`, body + `<p class="muted small">Only options that keep a set between similar muscles are shown.</p>`);
 }
 
@@ -209,6 +250,8 @@ function renderProgress() {
     <div class="tile"><small>Avg time (7)</small><b>${avg == null ? '—' : Math.round(avg)}<i>${avg == null ? '' : 'min'}</i></b></div>
     <div class="tile"><small>Strength</small><b>${siNow == null ? '—' : (siNow >= 100 ? '+' : '') + (siNow - 100).toFixed(1) + '%'}</b></div>
   </div>`;
+  html += weeklyCard();
+  html += bodyCard();
   html += `<section class="card"><h3>Workout time</h3><p class="sub">Minutes from first set to finish, last 30 workouts.</p><div id="ch-dur"></div></section>`;
   html += `<section class="card"><h3>Strength index</h3><p class="sub">Your current estimated 1-rep max on every exercise vs. your first time doing it, averaged. 100 = where you started.</p><div id="ch-si"></div></section>`;
 
@@ -235,7 +278,7 @@ function renderProgress() {
     const d = S.get().days[k];
     const sets = Object.values(d.log).filter(s => !s.skipped);
     const mins = d.started && d.finished ? Math.round((d.finished - d.started) / 60000) + ' min' : d.finished ? '' : 'in progress';
-    html += `<li><button data-act="toggle-day" data-k="${k}"><b>${esc(longDate(k))}</b><small>${sets.length} sets${mins ? ' · ' + mins : ''}</small></button>`;
+    html += `<li><button data-act="toggle-day" data-k="${k}"><b>${esc(longDate(k))}</b><small>${d.mode === 'short' ? 'short · ' : ''}${d.easy ? 'easy · ' : ''}${sets.length} sets${mins ? ' · ' + mins : ''}</small></button>`;
     if (ui.openDay === k) {
       html += `<ul class="sets">${d.plan.map((id, i) => { const s = d.log[i]; return `<li><span>${esc(EX[id]?.name || id)}</span><span>${s ? (s.skipped ? 'skipped' : `${fmtW(s.w)} × ${s.r}${s.rir != null ? ` <small>RIR ${s.rir === 3 ? '3+' : s.rir}</small>` : ''}`) : '—'}</span></li>`; }).join('')}</ul>`;
     }
@@ -244,8 +287,54 @@ function renderProgress() {
   html += `</ul></section>`;
   main.innerHTML = html;
 
+  const bw = S.seriesOf('bw');
+  if ($('#ch-bw')) lineChart($('#ch-bw'), bw, { fmt: v => v.toFixed(0), unit: ' ' + units() });
   barChart($('#ch-dur'), dur.slice(-30).map(d => ({ day: d.day, v: d.min })), { target: 25, unit: 'min', fmt: v => v.toFixed(0) });
   lineChart($('#ch-si'), si, { base: 100, fmt: v => v.toFixed(0) });
+}
+
+function weeklyCard() {
+  const { cur, prev } = S.weekly();
+  if (!cur.workouts && !prev.workouts) return '';
+  const row = (label, a, b, fmt, goodUp = true, unit = '') => {
+    if (a == null && b == null) return '';
+    const d = a != null && b != null ? a - b : null;
+    const zero = d == null || +fmt(Math.abs(d)) === 0;
+    const cls = zero || goodUp == null ? '' : (d > 0) === goodUp ? 'up' : 'down';
+    return `<tr><th>${label}</th><td>${a == null ? '—' : fmt(a) + unit}</td><td class="muted">${b == null ? '—' : fmt(b) + unit}</td><td class="delta ${cls}">${d == null ? '' : zero ? '±0' : (d > 0 ? '+' : '−') + fmt(Math.abs(d))}</td></tr>`;
+  };
+  const i0 = v => v.toFixed(0), f1 = v => v.toFixed(1);
+  const m = (x, k) => (x.m && x.m[k] > 0 ? x.m[k] : null);
+  return `<section class="card"><h3>This week</h3><p class="sub">Last 7 days vs. the 7 before.</p>
+    <table class="wk"><thead><tr><th></th><th>This</th><th>Last</th><th></th></tr></thead><tbody>
+    ${row('Workouts', cur.workouts, prev.workouts, i0)}
+    ${row('Avg time', cur.avgMin, prev.avgMin, i0, false, ' min')}
+    ${row('Sets', cur.sets, prev.sets, i0)}
+    ${row('Strength', cur.si, prev.si, f1)}
+    ${row('Body weight', m(cur, 'bw'), m(prev, 'bw'), f1, null, ' ' + units())}
+    ${row('Arm', m(cur, 'arm'), m(prev, 'arm'), f1, true, ' ' + lenUnit())}
+    ${row('Waist', m(cur, 'waist'), m(prev, 'waist'), f1, false, ' ' + lenUnit())}
+    </tbody></table></section>`;
+}
+
+function bodyCard() {
+  const ms = S.measures();
+  let html = `<section class="card"><div class="card-head"><h3>Body</h3><button class="link" data-act="open-measure">${S.measureDue(S.dayKey()) ? 'Log this week' : 'Edit'}</button></div>`;
+  if (!ms.length) {
+    return html + `<p class="sub">Strength shows you're getting stronger; size shows hypertrophy. Measure once a week. If arms and thighs grow while your waist holds steady, that's muscle, not fat.</p></section>`;
+  }
+  html += `<p class="sub">Since ${shortDate(ms[0].day)}. If arms and thighs grow while your waist holds steady, that's muscle.</p>`;
+  if (S.seriesOf('bw').length >= 2) html += `<h4>Body weight</h4><div id="ch-bw"></div>`;
+  html += `<ul class="ex-list">`;
+  for (const def of S.MEASURES) {
+    const ser = S.seriesOf(def.id);
+    if (!ser.length) continue;
+    const first = ser[0].v, last = ser[ser.length - 1].v, d = last - first;
+    const goodUp = def.id !== 'waist' && def.id !== 'bw';
+    const cls = ser.length < 2 || Math.abs(d) < 0.05 ? '' : def.id === 'bw' ? '' : (d > 0) === goodUp ? 'up' : 'down';
+    html += `<li><span class="nm"><b>${def.name}</b><small>${fmtW(last)} ${def.mass ? units() : lenUnit()}</small></span>${sparkline(ser.map(p => p.v))}<span class="delta ${cls}">${ser.length > 1 ? (d >= 0 ? '+' : '−') + fmtW(Math.abs(d)) : 'new'}</span></li>`;
+  }
+  return html + `</ul></section>`;
 }
 
 // ---------- SETTINGS ----------
@@ -343,6 +432,16 @@ document.addEventListener('click', e => {
       break;
     }
     case 'close-sheet': $('#sheet').close(); break;
+    case 'mode': S.setMode(key, t.dataset.v); ui.focus = null; render(); break;
+    case 'start-deload': S.startDeload(key); ui.focus = null; render(); toast('Easy week started.'); break;
+    case 'snooze-deload': S.snoozeDeload(key); render(); break;
+    case 'end-deload': if (confirm('End the easy week now?')) { S.endDeload(key || S.activeKey()); ui.focus = null; render(); } break;
+    case 'open-measure': openMeasure(); break;
+    case 'save-measure': {
+      const v = {};
+      document.querySelectorAll('#sheet [data-m]').forEach(inp => { const n = parseFloat(inp.value); if (n > 0) v[inp.dataset.m] = n; });
+      S.saveMeasure(S.dayKey(), v); $('#sheet').close(); render(); toast(Object.keys(v).length ? 'Measurements saved.' : 'Entry cleared.'); break;
+    }
   }
 });
 

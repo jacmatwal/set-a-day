@@ -73,3 +73,38 @@ export function alternatives(plan, index, equip) {
   const prev = EX[plan[index - 1]], next = EX[plan[index + 1]];
   return poolFor(cur.part, equip).filter(e => e.id !== cur.id && !(prev && conflicts(prev, e)) && !(next && conflicts(next, e)));
 }
+
+// ---------- short day: 5 compound lifts, each credited with two body parts ----------
+// Forearms get no direct work on short days (rows/RDLs still load the grip).
+export const SHORT_SLOTS = [
+  { id: 'squat', credits: ['quads', 'glutes'], ex: ['back_squat', 'front_squat', 'bulgarian', 'step_up', 'goblet_squat', 'reverse_lunge', 'high_step_up'] },
+  { id: 'hinge', credits: ['hamstrings', 'glutes'], ex: ['bb_rdl', 'db_rdl', 'sl_rdl', 'good_morning', 'hip_thrust'] },
+  { id: 'press', credits: ['chest', 'triceps'], ex: ['bench_press', 'db_bench', 'incline_db', 'close_grip_bench'] },
+  { id: 'pull', credits: ['back', 'biceps'], ex: ['bb_row', 'db_row', 'cable_pulldown', 'cable_row', 'chest_supported_row', 'pullup'] },
+  { id: 'overhead', credits: ['shoulders', 'triceps'], ex: ['ohp', 'db_ohp'] },
+];
+const SLOT_OF = Object.fromEntries(SHORT_SLOTS.flatMap(s => s.ex.map(id => [id, s])));
+export const creditsFor = id => SLOT_OF[id]?.credits;
+
+export function generateShortPlan(seedKey, equip, avoidIds = []) {
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const rng = mulberry32(hash('short:' + seedKey + '#' + attempt));
+    const picks = [];
+    for (const slot of SHORT_SLOTS) {
+      let pool = slot.ex.map(id => EX[id]).filter(e => isAvailable(e, equip));
+      if (!pool.length) continue;
+      if (pool.length > 1) pool = pool.filter(e => !avoidIds.includes(e.id)).length ? pool.filter(e => !avoidIds.includes(e.id)) : pool;
+      picks.push(pick(rng, pool));
+    }
+    const order = bestOrder(picks, rng);
+    if (order) return order.map(e => e.id);
+  }
+  return [];
+}
+
+// Short-day swaps stay inside the same slot.
+export function shortAlternatives(plan, index, equip) {
+  const cur = EX[plan[index]], slot = SLOT_OF[cur.id];
+  const prev = EX[plan[index - 1]], next = EX[plan[index + 1]];
+  return slot.ex.map(id => EX[id]).filter(e => e.id !== cur.id && isAvailable(e, equip) && !(prev && conflicts(prev, e)) && !(next && conflicts(next, e)));
+}

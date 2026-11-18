@@ -1,5 +1,5 @@
 // Offline cache for the app shell. Bump VERSION whenever any file changes.
-const VERSION = 'sad-v1';
+const VERSION = 'sad-v2';
 const FILES = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/store.js', 'js/planner.js', 'js/exercises.js', 'js/figure.js', 'js/charts.js',

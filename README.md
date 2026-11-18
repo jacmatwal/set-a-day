@@ -21,6 +21,15 @@ web app that you add to your iPhone home screen. No build step, no server, no ac
 - **Tracking** (`js/store.js`): weight × reps × reps-in-reserve for each set, plus the
   workout's start and finish times. Data lives in `localStorage` on the phone. Use
   Settings → Export backup.
+- **Short day** (`planner.js` → `SHORT_SLOTS`): 5 compound lifts (squat, hinge, press,
+  row, overhead press), each counted toward two body parts, about 12 minutes. Forearms
+  get no direct work on short days.
+- **Easy week**: if fewer than 1 in 4 sets in the last 14 days beat that lift's previous
+  best, the app offers a 7-day easy week: about 85% weight, stopping 3–4 reps short.
+  Easy-week sets are left out of the strength index and the progression suggestions.
+- **Body measurements**: weekly body weight, arm, chest, thigh and waist, entered in
+  Progress or from the end-of-workout card.
+- **Weekly card**: the last 7 days vs. the 7 before.
 - **Progress**: workout duration against a 25-min goal; a strength index (current
   estimated 1RM ÷ first estimated 1RM, averaged over every exercise you've done);
   per-exercise trends; history.
