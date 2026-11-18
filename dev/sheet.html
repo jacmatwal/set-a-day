@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><style>
+body{font:11px sans-serif;background:#111;color:#ddd;margin:8px}
+.row{display:flex;gap:6px;align-items:center;margin-bottom:4px}
+.row b{width:150px}
+.cell{width:200px;height:150px;background:#1b1d20}
+svg{width:100%;height:100%}
+.fb{stroke:#f2f3f5;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;fill:none}
+.fb-far{stroke:#7b8089}
+.fb-head{fill:#f2f3f5}
+.fp,.fp-faint,.fp-pad,.fp-ground{stroke:#555;stroke-width:3;fill:none;stroke-linecap:round}
+.fp-faint{stroke:#333}
+.fp-pad{stroke:#666;stroke-width:6}
+.fp-solid{fill:#666}
+.fp-box{fill:#2c2f33;stroke:#555}
+.fp-tower{fill:#26292d}
+.fp-cable{stroke:#aaa;stroke-width:1.2;stroke-dasharray:3 2}
+.fp-load{fill:#ff7a45}
+.fp-hub{fill:#111}
+</style><div id="o"></div>
+<script type="module">
+import {EXERCISES} from '../js/exercises.js';
+import {mountFigure, frameSVG} from '../js/figure.js';
+const o=document.getElementById('o');
+for(const e of EXERCISES){
+  const r=document.createElement('div');r.className='row';r.innerHTML=`<b>${e.name}</b>`;
+  for(const k of [0,0.5,1]){const c=document.createElement('div');c.className='cell';r.appendChild(c);mountFigure(c,e.anim,{still:true});c.querySelector('.fig-g').innerHTML=frameSVG(e.anim,k);}
+  o.appendChild(r);
+}
+</script>
